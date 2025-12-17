@@ -1,0 +1,66 @@
+#ifndef MESSAGES_HPP
+#define MESSAGES_HPP
+
+#include <string>
+#include <ostream>
+#include "technique.hpp"
+
+// =======================
+// FightAction
+// =======================
+struct FightAction {
+    std::string fighter_id;   // "A" o "B"
+    Technique tech;
+
+    FightAction() = default;
+
+    FightAction(const std::string& f, const Technique& t)
+        : fighter_id(f), tech(t) {}
+};
+
+// 🔴 ESTO ES LO QUE FALTABA
+inline std::ostream& operator<<(std::ostream& os, const FightAction& a)
+{
+    os << "[FightAction fighter=" << a.fighter_id
+       << ", tech=" << a.tech.name
+       << "]";
+    return os;
+}
+
+// =======================
+// FightUpdate
+// =======================
+struct FightUpdate {
+    std::string actor;
+    std::string my_pos;
+    std::string opp_pos;
+    std::string global_state;
+    bool success = false;
+    bool finished = false;
+
+    FightUpdate() = default;
+
+    FightUpdate(const std::string& act,
+                const std::string& my,
+                const std::string& opp,
+                bool succ,
+                bool fin)
+        : actor(act),
+          my_pos(my),
+          opp_pos(opp),
+          success(succ),
+          finished(fin) {}
+};
+
+inline std::ostream& operator<<(std::ostream& os, const FightUpdate& u)
+{
+    os << "[FightUpdate actor=" << u.actor
+       << ", my_pos=" << u.my_pos
+       << ", opp_pos=" << u.opp_pos
+       << ", success=" << u.success
+       << ", finished=" << u.finished
+       << "]";
+    return os;
+}
+
+#endif
