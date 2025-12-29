@@ -6,6 +6,7 @@
 #include "fight_engine.hpp"
 #include "fighterA.hpp"
 #include "fighterB.hpp"
+#include "arbiter_smart.hpp"  // Cambiar a árbitro inteligente
 
 using namespace cadmium;
 
@@ -16,10 +17,14 @@ struct topSystem : public Coupled {
         auto engine = addComponent<fight_engine>("fight_engine");
         auto fA     = addComponent<fighterA>("fighterA");
         auto fB     = addComponent<fighterB>("fighterB");
+        auto arbiter= addComponent<arbiter_smart>("arbiter");  // Usar árbitro inteligente
 
-        // Fighters → Engine
-        addCoupling(fA->out, engine->in);
-        addCoupling(fB->out, engine->in);
+        // Fighters → Arbiter
+        addCoupling(fA->out, arbiter->inA);
+        addCoupling(fB->out, arbiter->inB);
+        
+        // Arbiter → Engine
+        addCoupling(arbiter->outAction, engine->in);
 
         // Engine → Fighters
         addCoupling(engine->outA, fA->in);

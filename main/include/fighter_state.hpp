@@ -16,7 +16,8 @@ struct FighterState
     bool is_attacker = false;
     bool can_think = false;
 
-    int stamina = 100;
+    int stamina = 100;        // Energía actual (0-100)
+    int max_stamina = 100;    // Energía máxima
     int points = 0;
     bool submitted = false;
 
@@ -32,6 +33,23 @@ struct FighterState
             opponent_name = "fighterA";
         }
     }
+    
+    // Método para consumir energía
+    void consumeEnergy(int amount) {
+        stamina -= amount;
+        if (stamina < 0) stamina = 0;
+    }
+    
+    // Método para recuperar energía
+    void recoverEnergy(int amount) {
+        stamina += amount;
+        if (stamina > max_stamina) stamina = max_stamina;
+    }
+    
+    // Verificar si tiene suficiente energía
+    bool hasEnoughEnergy(int required) const {
+        return stamina >= required;
+    }
 };
 
 inline std::ostream &operator<<(std::ostream &os, const FighterState &s)
@@ -41,6 +59,7 @@ inline std::ostream &operator<<(std::ostream &os, const FighterState &s)
        << ", opp=" << s.opponent
        << ", can_think=" << s.can_think
        << ", is_attacker=" << s.is_attacker
+       << ", stamina=" << s.stamina
        << "]";
     return os;
 }

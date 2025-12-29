@@ -84,28 +84,26 @@ public:
         s.is_attacker = false;
     }
 
+    // En fighterA.hpp y fighterB.hpp (sección output)
     void output(const FighterState &s) const override
     {
         if (!s.can_think || !s.is_attacker)
             return;
 
-        std::cout << "[DEBUG][fighterB] Buscando técnica. Mi posición: "
-                  << s.position << std::endl;
+        std::cout << "[DEBUG][" << s.my_name << "] Buscando técnica. Mi posición: ";
 
-        // 🔴 BUSCAR TÉCNICAS QUE COINCIDAN CON MI POSICIÓN
-        // Como soy el atacante (A en la representación), busco técnicas donde A esté en mi posición
+        std::vector<const Technique *> valid_techniques;
         std::string patron_busqueda = "A:" + s.position;
 
-        bool encontrada = false;
+        // Buscar técnicas válidas
         for (const auto &t : s.techniques)
         {
             // Verificar si la técnica aplica a mi posición
             size_t pos = t.from_state.find(patron_busqueda);
+            bool match = false;
 
             if (pos != std::string::npos)
             {
-                // Verificar que sea exactamente "A:mi_posicion" seguido de coma o paréntesis
-                bool match = false;
                 if (pos + patron_busqueda.length() < t.from_state.length())
                 {
                     char siguiente = t.from_state[pos + patron_busqueda.length()];
@@ -113,30 +111,30 @@ public:
                 }
                 else
                 {
-                    match = true; // Final del string
+                    match = true;
                 }
+            }
 
-                if (match)
-                {
-                    std::cout << "[DEBUG][fighterB] ¡ENCONTRADA! "
-                              << t.name << " from=" << t.from_state << std::endl;
-                    out->addMessage(FightAction("fighterB", t));
-                    encontrada = true;
-                    break;
-                }
+            // Verificar si tengo suficiente energía
+            bool has_energy = s.stamina >= t.energy_cost;
+
+            if (match && has_energy)
+            {
+                valid_techniques.push_back(&t);
             }
         }
 
-        if (!encontrada)
+        // Si no encuentro como A, buscar como O
+        if (valid_techniques.empty())
         {
-            // 🔴 INTENTAR BUSCAR COMO OPONENTE (O) también
             std::string patron_oponente = "O:" + s.position;
             for (const auto &t : s.techniques)
             {
                 size_t pos = t.from_state.find(patron_oponente);
+                bool match = false;
+
                 if (pos != std::string::npos)
                 {
-                    bool match = false;
                     if (pos + patron_oponente.length() < t.from_state.length())
                     {
                         char siguiente = t.from_state[pos + patron_oponente.length()];
@@ -146,24 +144,54 @@ public:
                     {
                         match = true;
                     }
+                }
 
-                    if (match)
-                    {
-                        std::cout << "[DEBUG][fighterB] ¡ENCONTRADA como O! "
-                                  << t.name << " from=" << t.from_state << std::endl;
-                        out->addMessage(FightAction("fighterB", t));
-                        encontrada = true;
-                        break;
-                    }
+                bool has_energy = s.stamina >= t.energy_cost;
+
+                if (match && has_energy)
+                {
+                    valid_techniques.push_back(&t);
                 }
             }
         }
 
-        if (!encontrada)
+        // Seleccionar técnica
+        if (!valid_techniques.empty())
         {
-            std::cout << "[ERROR][fighterB] No encontré técnica para posición: "
-                      << s.position << std::endl;
-            std::cout << "[ERROR][fighterB] Patrón buscado: " << patron_busqueda << std::endl;
+            // Seleccionar la técnica más eficiente energéticamente
+            const Technique *selected = valid_techniques[0];
+            double best_score = 0.0;
+
+            for (const auto *t : valid_techniques)
+            {
+                // Puntaje: eficiencia energética + velocidad
+                double efficiency = (t->energy_cost > 0) ? (double)t->energy_gain / t->energy_cost : 1.0;
+                double speed = 1.0 / (t->time_cost + 0.1);
+                double score = efficiency * 2.0 + speed;
+
+                // Bonus para técnicas defensivas si la energía es baja
+                if (s.stamina < 30 && t->type == "Defensiva")
+                {
+                    score += 1.5;
+                }
+
+                if (score > best_score)
+                {
+                    best_score = score;
+                    selected = t;
+                }
+            }
+
+            std::cout << "[DEBUG][" << s.my_name << "] Seleccionada: "
+                      << selected->name
+                      << " (E: " << selected->energy_cost << "/"
+                      << selected->energy_gain << " T: " << selected->time_cost << "s)" << std::endl;
+            out->addMessage(FightAction(s.my_name, *selected));
+        }
+        else
+        {
+            std::cout << "[ERROR][" << s.my_name << "] No encontré técnica válida"
+                      << " para posición: " << s.position;
         }
     }
 

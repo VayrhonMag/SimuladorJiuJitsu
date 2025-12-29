@@ -49,29 +49,33 @@ std::vector<Technique> loadTechniqueCSV(const std::string& filename) {
             if (!std::getline(ss, token, ';')) continue;
             t.category = token;
             
-            // Estado Inicial (columna 3)
+            // Tipo (columna 3) - NUEVO
+            if (!std::getline(ss, token, ';')) continue;
+            t.type = token;
+            
+            // Estado Inicial (columna 4)
             if (!std::getline(ss, token, ';')) continue;
             t.from_state = token;
-            
-            // Descripción Estado Inicial (columna 4) - OPcional
-            if (!std::getline(ss, token, ';')) continue;
-            t.desc_init = token;
             
             // Estado Final Exitoso (columna 5)
             if (!std::getline(ss, token, ';')) continue;
             t.to_state_success = token;
             
-            // Descripción Estado Exitoso (columna 6) - Opcional
-            if (!std::getline(ss, token, ';')) continue;
-            t.desc_success = token;
-            
-            // Estado Final Fallido (columna 7)
+            // Estado Final Fallido (columna 6)
             if (!std::getline(ss, token, ';')) continue;
             t.to_state_fail = token;
             
-            // Descripción Estado Fallido (columna 8) - Opcional
+            // Tiempo (s) (columna 7) - NUEVO
             if (!std::getline(ss, token, ';')) continue;
-            t.desc_fail = token;
+            t.time_cost = std::stoi(token);
+            
+            // Costo de Energía (columna 8) - NUEVO
+            if (!std::getline(ss, token, ';')) continue;
+            t.energy_cost = std::stoi(token);
+            
+            // Ganancia de Energía (columna 9) - NUEVO
+            if (!std::getline(ss, token, ';')) continue;
+            t.energy_gain = std::stoi(token);
             
             // Normalizar strings (remover espacios)
             auto normalize = [](std::string& str) {
@@ -85,8 +89,11 @@ std::vector<Technique> loadTechniqueCSV(const std::string& filename) {
             
             techniques.push_back(t);
             
-            std::cout << "[DEBUG] Cargada técnica: " << t.id << " - " << t.name 
-                      << " from: " << t.from_state << std::endl;
+            //std::cout << "[DEBUG] Cargada técnica: " << t.id << " - " << t.name 
+                      //<< " type: " << t.type 
+                      //<< " time: " << t.time_cost
+                      //<< " energy_cost: " << t.energy_cost
+                      //<< " energy_gain: " << t.energy_gain << std::endl;
                       
         } catch (const std::exception& e) {
             std::cerr << "[ERROR] Error procesando línea: " << line << std::endl;

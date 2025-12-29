@@ -8,21 +8,24 @@
 // =======================
 // FightAction
 // =======================
-struct FightAction {
-    std::string fighter_id;   // "A" o "B"
+struct FightAction
+{
+    std::string fighter_id; // "fighterA" o "fighterB"
     Technique tech;
 
     FightAction() = default;
 
-    FightAction(const std::string& f, const Technique& t)
+    FightAction(const std::string &f, const Technique &t)
         : fighter_id(f), tech(t) {}
 };
 
-// 🔴 ESTO ES LO QUE FALTABA
-inline std::ostream& operator<<(std::ostream& os, const FightAction& a)
+// 🔴 ESTO ES LO QUE FALTABA - Asegúrate que exista
+inline std::ostream &operator<<(std::ostream &os, const FightAction &a)
 {
     os << "[FightAction fighter=" << a.fighter_id
        << ", tech=" << a.tech.name
+       << ", energy_cost=" << a.tech.energy_cost
+       << ", energy_gain=" << a.tech.energy_gain
        << "]";
     return os;
 }
@@ -30,7 +33,8 @@ inline std::ostream& operator<<(std::ostream& os, const FightAction& a)
 // =======================
 // FightUpdate
 // =======================
-struct FightUpdate {
+struct FightUpdate
+{
     std::string actor;
     std::string my_pos;
     std::string opp_pos;
@@ -40,9 +44,9 @@ struct FightUpdate {
 
     FightUpdate() = default;
 
-    FightUpdate(const std::string& act,
-                const std::string& my,
-                const std::string& opp,
+    FightUpdate(const std::string &act,
+                const std::string &my,
+                const std::string &opp,
                 bool succ,
                 bool fin)
         : actor(act),
@@ -52,7 +56,7 @@ struct FightUpdate {
           finished(fin) {}
 };
 
-inline std::ostream& operator<<(std::ostream& os, const FightUpdate& u)
+inline std::ostream &operator<<(std::ostream &os, const FightUpdate &u)
 {
     os << "[FightUpdate actor=" << u.actor
        << ", my_pos=" << u.my_pos
@@ -62,5 +66,4 @@ inline std::ostream& operator<<(std::ostream& os, const FightUpdate& u)
        << "]";
     return os;
 }
-
 #endif
