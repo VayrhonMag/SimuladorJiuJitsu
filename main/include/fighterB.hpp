@@ -1,7 +1,12 @@
 #ifndef FIGHTER_B_HPP
 #define FIGHTER_B_HPP
 
+#include "simple_profiles_tactical.hpp"
+#include "profile_manager.hpp"
 #include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <limits>
 #include "cadmium/modeling/devs/atomic.hpp"
 #include "fighter_state.hpp"
 #include "messages.hpp"
@@ -12,6 +17,9 @@ using namespace cadmium;
 
 class fighterB : public Atomic<FighterState>
 {
+private:
+    ProfileManager profileManager;
+
 public:
     Port<FightUpdate> in;
     Port<FightAction> out;
@@ -23,90 +31,106 @@ public:
         out = addOutPort<FightAction>("out");
 
         state.techniques = loadTechniqueCSV("Grafo.csv");
+        state.profile = profileManager.getProfile("fighterB");
+
+        std::cout << "[INIT][fighterB] Listo. Perfil: " << state.profile.style
+                  << ", Energía inicial: " << state.stamina << std::endl;
     }
 
-    void externalTransition(FighterState &s, double) const override
+    void externalTransition(FighterState &s, double e) const override
     {
         for (const auto &u : in->getBag())
         {
-            std::cout << "[DEBUG][fighterB] Recibí update. Actor: "
-                      << u.actor << ", Estado: " << u.my_pos << std::endl;
-
-            // Si el combate terminó
             if (u.finished)
             {
-                s.can_think = false;
-                s.is_attacker = false;
-                std::cout << "[DEBUG][fighterB] Combate terminado. Fin." << std::endl;
+                s.resetAfterAction();
                 return;
             }
 
-            // Extraer mi posición del estado convertido
+            s.my_points = u.my_points;
+            s.opponent_points = u.opp_points;
+            s.time_remaining = u.time_remaining;
+            s.total_time = 300.0 - u.time_remaining;
+            s.is_winning = (u.my_points > u.opp_points);
+
             s.position = extractMyPosition(u.my_pos, "fighterB");
             s.opponent = extractMyPosition(u.my_pos, "fighterA");
+            s.recordPosition(s.position);
 
-            // 🔴 INFERIR QUIÉN ES EL ATACANTE (A) EN LA REPRESENTACIÓN
-            std::string estado = u.my_pos;
-            size_t posA = estado.find("fighterA:");
-            size_t posB = estado.find("fighterB:");
+            s.is_attacker = (u.actor == "fighterB");
 
-            std::string atacante_representacion;
-            if (posA < posB)
+            if (s.is_attacker && s.phase == FighterState::Phase::IDLE)
             {
-                // fighterA aparece primero -> fighterA es A (Atacante en la representación)
-                atacante_representacion = "fighterA";
+                s.startThinking();
             }
-            else
+            else if (!s.is_attacker)
             {
-                // fighterB aparece primero -> fighterB es A (Atacante en la representación)
-                atacante_representacion = "fighterB";
+                s.resetAfterAction();
             }
 
-            // Yo soy atacante si:
-            // 1. El motor dice que soy el actor ACTUAL
-            // 2. Y además soy el atacante en la representación (rol A)
-            s.is_attacker = (u.actor == "fighterB") && (atacante_representacion == "fighterB");
-
-            // Yo pienso SOLO si soy el atacante actual
-            s.can_think = (u.actor == "fighterB");
-
-            std::cout << "[DEBUG][fighterB] Pos: " << s.position
-                      << ", Opp: " << s.opponent
-                      << ", Atacante en rep: " << atacante_representacion
-                      << ", Soy atacante: " << s.is_attacker
-                      << ", CanThink: " << s.can_think << std::endl;
+            s.exchanges++;
         }
     }
 
     void internalTransition(FighterState &s) const override
     {
-        s.can_think = false;
-        s.is_attacker = false;
+        //  pensando
+        if (s.phase == FighterState::Phase::THINKING)
+        {
+            s.thinking_time = 0; 
+            selectTechnique(s);
+        }
+        
     }
 
-    // En fighterA.hpp y fighterB.hpp (sección output)
     void output(const FighterState &s) const override
     {
-        if (!s.can_think || !s.is_attacker)
-            return;
+        if (s.phase == FighterState::Phase::READY_TO_OUTPUT && s.selected_technique != nullptr)
+        {
+            std::cout << "[OUTPUT][fighterB] ENVIANDO ACCIÓN: "
+                      << s.selected_technique->name
+                      << " (Energía restante: " << s.stamina << ")" << std::endl;
 
-        std::cout << "[DEBUG][" << s.my_name << "] Buscando técnica. Mi posición: ";
+            out->addMessage(FightAction(s.my_name, *(s.selected_technique)));
 
+            const_cast<FighterState &>(s).resetAfterAction();
+        }
+    }
+
+    double timeAdvance(const FighterState &s) const override
+    {
+        switch (s.phase)
+        {
+        case FighterState::Phase::IDLE:
+            return std::numeric_limits<double>::infinity();
+
+        case FighterState::Phase::THINKING:
+            return s.thinking_time;
+
+        case FighterState::Phase::READY_TO_OUTPUT:
+            return 0.0;
+
+        default:
+            return std::numeric_limits<double>::infinity();
+        }
+    }
+
+private:
+    void selectTechnique(FighterState &s) const
+    {
         std::vector<const Technique *> valid_techniques;
-        std::string patron_busqueda = "A:" + s.position;
 
-        // Buscar técnicas válidas
+        std::string patron_A = "A:" + s.position;
         for (const auto &t : s.techniques)
         {
-            // Verificar si la técnica aplica a mi posición
-            size_t pos = t.from_state.find(patron_busqueda);
+            size_t pos = t.from_state.find(patron_A);
             bool match = false;
 
             if (pos != std::string::npos)
             {
-                if (pos + patron_busqueda.length() < t.from_state.length())
+                if (pos + patron_A.length() < t.from_state.length())
                 {
-                    char siguiente = t.from_state[pos + patron_busqueda.length()];
+                    char siguiente = t.from_state[pos + patron_A.length()];
                     match = (siguiente == ',' || siguiente == ')');
                 }
                 else
@@ -115,8 +139,7 @@ public:
                 }
             }
 
-            // Verificar si tengo suficiente energía
-            bool has_energy = s.stamina >= t.energy_cost;
+            bool has_energy = s.canAffordTechnique(t);
 
             if (match && has_energy)
             {
@@ -124,20 +147,19 @@ public:
             }
         }
 
-        // Si no encuentro como A, buscar como O
         if (valid_techniques.empty())
         {
-            std::string patron_oponente = "O:" + s.position;
+            std::string patron_O = "O:" + s.position;
             for (const auto &t : s.techniques)
             {
-                size_t pos = t.from_state.find(patron_oponente);
+                size_t pos = t.from_state.find(patron_O);
                 bool match = false;
 
                 if (pos != std::string::npos)
                 {
-                    if (pos + patron_oponente.length() < t.from_state.length())
+                    if (pos + patron_O.length() < t.from_state.length())
                     {
-                        char siguiente = t.from_state[pos + patron_oponente.length()];
+                        char siguiente = t.from_state[pos + patron_O.length()];
                         match = (siguiente == ',' || siguiente == ')');
                     }
                     else
@@ -146,7 +168,7 @@ public:
                     }
                 }
 
-                bool has_energy = s.stamina >= t.energy_cost;
+                bool has_energy = s.canAffordTechnique(t);
 
                 if (match && has_energy)
                 {
@@ -155,53 +177,36 @@ public:
             }
         }
 
-        // Seleccionar técnica
         if (!valid_techniques.empty())
         {
-            // Seleccionar la técnica más eficiente energéticamente
-            const Technique *selected = valid_techniques[0];
-            double best_score = 0.0;
+            const Technique *selected = selectTacticalWithProfile(
+                valid_techniques,
+                s.position,
+                &s.profile,
+                "technical",
+                s.is_winning,
+                s.stamina,
+                s.recent_techniques,
+                s.recent_positions);
 
-            for (const auto *t : valid_techniques)
+            if (selected)
             {
-                // Puntaje: eficiencia energética + velocidad
-                double efficiency = (t->energy_cost > 0) ? (double)t->energy_gain / t->energy_cost : 1.0;
-                double speed = 1.0 / (t->time_cost + 0.1);
-                double score = efficiency * 2.0 + speed;
-
-                // Bonus para técnicas defensivas si la energía es baja
-                if (s.stamina < 30 && t->type == "Defensiva")
-                {
-                    score += 1.5;
-                }
-
-                if (score > best_score)
-                {
-                    best_score = score;
-                    selected = t;
-                }
+                std::cout << "[SELECT][fighterB] Técnica seleccionada: "
+                          << selected->name << " (Costo energía: " << selected->energy_cost << ")" << std::endl;
+                s.finishThinking(selected);
             }
-
-            std::cout << "[DEBUG][" << s.my_name << "] Seleccionada: "
-                      << selected->name
-                      << " (E: " << selected->energy_cost << "/"
-                      << selected->energy_gain << " T: " << selected->time_cost << "s)" << std::endl;
-            out->addMessage(FightAction(s.my_name, *selected));
+            else
+            {
+                std::cout << "[ERROR][fighterB] No se pudo seleccionar técnica" << std::endl;
+                s.resetAfterAction();
+            }
         }
         else
         {
-            std::cout << "[ERROR][" << s.my_name << "] No encontré técnica válida"
-                      << " para posición: " << s.position;
+            std::cout << "[ERROR][fighterB] No hay técnicas válidas para posición: "
+                      << s.position << " o sin energía suficiente (Energía actual: " << s.stamina << ")" << std::endl;
+            s.resetAfterAction();
         }
-    }
-
-    double timeAdvance(const FighterState &s) const override
-    {
-        if (s.can_think && s.is_attacker)
-        {
-            return 0.1;
-        }
-        return std::numeric_limits<double>::infinity();
     }
 };
 

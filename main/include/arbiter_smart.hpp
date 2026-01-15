@@ -1,3 +1,4 @@
+
 #ifndef ARBITER_SMART_HPP
 #define ARBITER_SMART_HPP
 
@@ -5,6 +6,8 @@
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
+#include <vector>
+#include <limits>
 #include "cadmium/modeling/devs/atomic.hpp"
 #include "messages.hpp"
 
@@ -84,19 +87,23 @@ public:
     void output(const ArbiterSmartState& s) const override {
         if(!s.ready || s.actions.empty()) return;
         
-        // 🔥 DECISIÓN INTELIGENTE basada en energía
-        std::vector<FightAction> valid_actions;
+        std::cout << "\n Tecnica:" << std::endl;
+        std::cout << "-------------------------" << std::endl;
         
-        // Filtrar acciones por energía disponible
+        // 🔴 Primero filtrar por energía disponible
+        std::vector<FightAction> affordable_actions;
+        std::vector<FightAction> unaffordable_actions;
+        
         for(const auto& action : s.actions) {
             int current_energy = (action.fighter_id == "fighterA") 
                                 ? s.energy_fighterA 
                                 : s.energy_fighterB;
             
             if(current_energy >= action.tech.energy_cost) {
-                valid_actions.push_back(action);
+                affordable_actions.push_back(action);
             } else {
-                std::cout << "[ARBITER_SMART] " << action.fighter_id 
+                unaffordable_actions.push_back(action);
+                std::cout << "" << action.fighter_id 
                           << " no tiene suficiente energía para " 
                           << action.tech.name 
                           << " (necesita " << action.tech.energy_cost 
@@ -104,55 +111,68 @@ public:
             }
         }
         
-        if(valid_actions.empty()) {
-            std::cout << "[ARBITER_SMART] Ninguna acción válida por falta de energía" << std::endl;
-            return;
+        if(affordable_actions.empty() && !unaffordable_actions.empty()) {
+            std::cout << "No llego tecnica" << std::endl;
+            
+            // Ordenar por costo de energía
+            std::sort(unaffordable_actions.begin(), unaffordable_actions.end(),
+                [](const FightAction& a, const FightAction& b) {
+                    return a.tech.energy_cost < b.tech.energy_cost;
+                });
+            
+            affordable_actions.push_back(unaffordable_actions[0]);
+            std::cout << "Usando " << unaffordable_actions[0].tech.name 
+                      << " (costo mínimo: " << unaffordable_actions[0].tech.energy_cost << ")" << std::endl;
         }
         
-        // Decisión basada en múltiples factores
+        if(affordable_actions.empty()) {
+            std::cout << "No hay acciones posibles. Tiempo pasa sin acción." << std::endl;
+            return; // No enviar ninguna acción, el tiempo pasará
+        }
+        
+       
         FightAction selected;
-        if(valid_actions.size() == 1) {
+        if(affordable_actions.size() == 1) {
             // Solo una opción
-            selected = valid_actions[0];
+            selected = affordable_actions[0];
         } else {
-            // Elegir la mejor técnica basada en:
-            // 1. Eficiencia energética (mayor ganancia/costo)
-            // 2. Tiempo de ejecución
-            // 3. Tipo de técnica (defensivas tienen prioridad cuando la energía es baja)
-            
+
             // Primero, calcular puntaje para cada acción
             std::vector<std::pair<FightAction, double>> scored_actions;
             
-            for(const auto& action : valid_actions) {
+            for(const auto& action : affordable_actions) {
                 double score = 0.0;
                 int current_energy = (action.fighter_id == "fighterA") 
                                     ? s.energy_fighterA 
                                     : s.energy_fighterB;
                 
-                // Factor 1: Eficiencia energética
+                
                 double efficiency = 0.0;
                 if(action.tech.energy_cost > 0) {
                     efficiency = static_cast<double>(action.tech.energy_gain) / action.tech.energy_cost;
                 }
                 
-                // Factor 2: Velocidad (menor tiempo es mejor)
+                
                 double speed_factor = 1.0 / (action.tech.time_cost + 0.1);
                 
-                // Factor 3: Prioridad de defensa si energía baja
+                
                 double defense_bonus = 0.0;
                 if(current_energy < 30 && action.tech.type == "Defensiva") {
-                    defense_bonus = 2.0; // Bonus para técnicas defensivas cuando la energía es baja
+                    defense_bonus = 2.0; 
                 }
                 
-                // Factor 4: Penalización por bajo stamina
+                
                 double stamina_penalty = (100.0 - current_energy) / 100.0;
+                
+        
+                double energy_ratio = static_cast<double>(current_energy) / action.tech.energy_cost;
+                if(energy_ratio > 2.0) score += 0.5;
                 
                 score = efficiency * 3.0 + speed_factor * 2.0 + defense_bonus - stamina_penalty;
                 
                 scored_actions.push_back({action, score});
             }
             
-            // Seleccionar la acción con mayor puntaje
             auto best_action = *std::max_element(scored_actions.begin(), scored_actions.end(),
                 [](const auto& a, const auto& b) {
                     return a.second < b.second;
@@ -161,22 +181,45 @@ public:
             selected = best_action.first;
         }
         
-        // Actualizar energía en el estado
-        const_cast<ArbiterSmartState&>(s).updateEnergy(selected);
+        // 🔴 Verificar si la acción se puede ejecutar
+        int current_energy = (selected.fighter_id == "fighterA") 
+                            ? s.energy_fighterA 
+                            : s.energy_fighterB;
         
-        outAction->addMessage(selected);
-        
-        std::cout << "\n[ARBITER_SMART] Decisión inteligente:" << std::endl;
-        std::cout << "-------------------------" << std::endl;
-        for(size_t i = 0; i < s.actions.size(); i++) {
-            std::cout << "Opción " << i << ": " << s.actions[i].fighter_id 
-                      << " - " << s.actions[i].tech.name 
-                      << " (E: " << s.actions[i].tech.energy_cost << "/" 
-                      << s.actions[i].tech.energy_gain << ")" << std::endl;
+        if(current_energy < selected.tech.energy_cost) {
+            std::cout << "⚠️ Acción " << selected.tech.name 
+                      << " NO se ejecuta por falta de energía" << std::endl;
+            std::cout << "Enviando acción de descanso/respiro" << std::endl;
+            
+            
+            Technique rest_tech;
+            rest_tech.id = "REST";
+            rest_tech.name = "Descanso";
+            rest_tech.type = "Defensiva";
+            rest_tech.category = "Recuperación";
+            rest_tech.time_cost = 5; 
+            rest_tech.energy_cost = 0;
+            rest_tech.energy_gain = 5; 
+            
+            // Mantener posiciones actuales
+            rest_tech.from_state = "Pos(A:De_Pie, O:De_Pie)"; 
+            rest_tech.to_state_success = "Pos(A:De_Pie, O:De_Pie)";
+            rest_tech.to_state_fail = "Pos(A:De_Pie, O:De_Pie)";
+            
+            FightAction rest_action(selected.fighter_id, rest_tech);
+            outAction->addMessage(rest_action);
+            
+            std::cout << "🏃 " << selected.fighter_id << " descansa (Energía +5)" << std::endl;
+        } else {
+            // Ejecutar acción normalmente
+            const_cast<ArbiterSmartState&>(s).updateEnergy(selected);
+            outAction->addMessage(selected);
+            
+            std::cout << "🏆 SELECCIONADA: " << selected.fighter_id 
+                      << " - " << selected.tech.name 
+                      << " (Tiempo: " << selected.tech.time_cost << "s)" << std::endl;
         }
-        std::cout << "🏆 SELECCIONADA: " << selected.fighter_id 
-                  << " - " << selected.tech.name 
-                  << " (Tiempo: " << selected.tech.time_cost << "s)" << std::endl;
+        
         std::cout << "Energía actual - A: " << s.energy_fighterA 
                   << " B: " << s.energy_fighterB << std::endl;
         std::cout << "-------------------------\n" << std::endl;

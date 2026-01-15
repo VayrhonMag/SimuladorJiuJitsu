@@ -5,7 +5,6 @@
 #include <string>
 
 // Convierte un estado con roles "A" (Atacante) y "O" (Oponente)
-// a uno donde "A"=mi_nombre y "O"=oponente_nombre
 static std::string convertRoles(const std::string &state_with_roles,
                                 const std::string &actor_A,
                                 const std::string &actor_O)
@@ -48,21 +47,18 @@ static std::string extractMyPosition(const std::string &state,
     {
         return "Sumision";
     }
-
-    // Buscar directamente mi nombre
     std::string key = my_name + ":";
     size_t start = state.find(key);
 
     if (start == std::string::npos)
     {
-        // Intentar buscar con formato A:/O:
         if (my_name == "fighterA")
         {
             key = "A:";
         }
         else if (my_name == "fighterB")
         {
-            key = "O:"; // fighterB generalmente es O
+            key = "O:"; 
         }
         start = state.find(key);
 
