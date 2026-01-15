@@ -21,9 +21,13 @@ JiuJitsuFight/
 
 Flujo correcto de uso
 
-Compilar el proyecto:
 
-./build_sim.sh
+Compilar el proyecto:
+En caso de tener una simulación ya creada ejecutar:
+
+rm -rf build bin
+luego,
+source ./build_sim.sh
 
 VERIFICAR LA COPIA DEL GRAFO DENTRO DE CARPETA build.
 
